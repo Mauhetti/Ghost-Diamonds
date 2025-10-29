@@ -217,31 +217,40 @@ async function refreshLeaderboardFromFirebase() {
         if (diamondCount > 0) {
           // Essayer de récupérer le nom depuis /players/{address} pour l'affichage
           try {
-            const playerResp = await fetch(`${RTDB_URL}/players/${address}.json`);
-            let playerName = address.substring(0, 8) + '...'; // Fallback
-            
-            if (playerResp.ok) {
-              const playerData = await playerResp.json();
-              if (playerData && playerData.name) {
-                // ✅ VALIDATION ET NETTOYAGE DU NOM
-                playerName = playerData.name.trim();
-                
-                // Vérifier si le nom est valide
-                if (!playerName || playerName === '' || playerName === 'null' || playerName === 'undefined') {
-                  playerName = `Player_${address.substring(0, 8)}`;
-                } else {
-                  // Nettoyer le nom pour l'affichage
-                  playerName = playerName
-                    .replace(/[^\w\s-]/g, '') // Garder seulement lettres, chiffres, espaces et tirets
-                    .substring(0, 15); // Limiter à 15 caractères pour l'affichage
-                  
-                  if (playerName.length === 0) {
-                    playerName = `Player_${address.substring(0, 8)}`;
-                  }
+            // ✅ 1) Tenter de lire le nom depuis players/{address}/diamondCount.json
+            let playerName = address.substring(0, 8) + '...'; // Fallback initial
+
+            const diamondCountResp = await fetch(`${RTDB_URL}/players/${address}/diamondCount.json`);
+            if (diamondCountResp.ok) {
+              const diamondCountData = await diamondCountResp.json();
+              if (diamondCountData && diamondCountData.name) {
+                playerName = String(diamondCountData.name).trim();
+              }
+            }
+
+            // ✅ 2) Fallback: tenter players/{address}/lives.json si pas de nom
+            if (!playerName || playerName.startsWith(address.substring(0, 8))) {
+              const livesResp = await fetch(`${RTDB_URL}/players/${address}/lives.json`);
+              if (livesResp.ok) {
+                const livesData = await livesResp.json();
+                if (livesData && livesData.name) {
+                  playerName = String(livesData.name).trim();
                 }
               }
             }
-            
+
+            // ✅ 3) Valider et nettoyer le nom, ou générer un fallback lisible
+            if (!playerName || playerName === '' || playerName === 'null' || playerName === 'undefined') {
+              playerName = `Player_${address.substring(0, 8)}`;
+            } else {
+              playerName = playerName
+                .replace(/[^\w\s-]/g, '')
+                .substring(0, 15);
+              if (playerName.length === 0) {
+                playerName = `Player_${address.substring(0, 8)}`;
+              }
+            }
+
             newData.push({ name: playerName, diamonds: diamondCount });
           } catch (nameError) {
             // Fallback avec nom généré
